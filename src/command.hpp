@@ -59,6 +59,7 @@ namespace zmq
             own,
             attach,
             bind,
+			fd_assoc,
             activate_read,
             activate_write,
             hiccup,
@@ -102,6 +103,11 @@ namespace zmq
                 zmq::pipe_t *pipe;
             } bind;
 
+			struct {
+				zmq::pipe_t *pipe;
+				int fd;
+			} fd_assoc;
+			
             //  Sent by pipe writer to inform dormant pipe reader that there
             //  are messages in the pipe.
             struct {

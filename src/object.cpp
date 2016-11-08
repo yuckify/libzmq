@@ -106,6 +106,11 @@ void zmq::object_t::process_command (command_t &cmd_)
         process_seqnum ();
         break;
 
+	case command_t::fd_assoc:
+		process_fd_assoc(cmd_.args.fd_assoc.pipe, cmd_.args.fd_assoc.fd);
+		process_seqnum ();
+        break;
+		
     case command_t::hiccup:
         process_hiccup (cmd_.args.hiccup.pipe);
         break;
@@ -245,7 +250,19 @@ void zmq::object_t::send_bind (own_t *destination_, pipe_t *pipe_,
     cmd.destination = destination_;
     cmd.type = command_t::bind;
     cmd.args.bind.pipe = pipe_;
-    send_command (cmd);
+	send_command (cmd);
+}
+
+void zmq::object_t::send_fd_assoc(zmq::own_t *destination_, zmq::pipe_t *pipe_, int fd_)
+{
+	destination_->inc_seqnum ();
+	
+	command_t cmd;
+	cmd.destination = destination_;
+	cmd.type = command_t::fd_assoc;
+	cmd.args.fd_assoc.pipe = pipe_;
+	cmd.args.fd_assoc.fd = fd_;
+	send_command(cmd);
 }
 
 void zmq::object_t::send_activate_read (pipe_t *destination_)
@@ -373,7 +390,12 @@ void zmq::object_t::process_attach (i_engine *)
 
 void zmq::object_t::process_bind (pipe_t *)
 {
-    zmq_assert (false);
+	zmq_assert (false);
+}
+
+void zmq::object_t::process_fd_assoc(zmq::pipe_t *pipe_, int fd_)
+{
+	zmq_assert (false);
 }
 
 void zmq::object_t::process_activate_read ()

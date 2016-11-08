@@ -403,6 +403,9 @@ void zmq::session_base_t::process_attach (i_engine *engine_)
 
         //  Ask socket to plug into the remote end of the pipe.
         send_bind (socket, pipes [1]);
+		if (options.type == ZMQ_ROUTER) {
+			send_fd_assoc(socket, pipes [1], engine_->fd());
+		}
     }
 
     //  Plug in the engine.

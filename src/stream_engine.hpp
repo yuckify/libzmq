@@ -84,6 +84,7 @@ namespace zmq
         void in_event ();
         void out_event ();
         void timer_event (int id_);
+		int fd() { return s; }
 
     private:
         //  Unplug the engine from the session.

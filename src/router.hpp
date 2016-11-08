@@ -31,6 +31,7 @@
 #define __ZMQ_ROUTER_HPP_INCLUDED__
 
 #include <map>
+#include <unordered_map>
 
 #include "socket_base.hpp"
 #include "session_base.hpp"
@@ -57,6 +58,7 @@ namespace zmq
         //  Overrides of functions from socket_base_t.
         void xattach_pipe (zmq::pipe_t *pipe_, bool subscribe_to_all_);
         int xsetsockopt (int option_, const void *optval_, size_t optvallen_);
+        int xgetsockopt (int option_, void *optval_, size_t *optvallen_);
         int xsend (zmq::msg_t *msg_);
         int xrecv (zmq::msg_t *msg_);
         bool xhas_in ();
@@ -64,6 +66,8 @@ namespace zmq
         void xread_activated (zmq::pipe_t *pipe_);
         void xwrite_activated (zmq::pipe_t *pipe_);
         void xpipe_terminated (zmq::pipe_t *pipe_);
+		
+		void process_fd_assoc(zmq::pipe_t *pipe_, int fd_);
 
     protected:
 
@@ -71,10 +75,12 @@ namespace zmq
         int rollback ();
         blob_t get_credential () const;
 
+		std::string xmonitor_event_payload(int event_, intptr_t value_, const std::string &addr_);
+		
     private:
 
         //  Receive peer id and update lookup map
-        bool identify_peer (pipe_t *pipe_);
+        bool identify_peer (pipe_t *pipe_, int fd_);
 
         //  Fair queueing object for inbound pipes.
         fq_t fq;
@@ -105,14 +111,20 @@ namespace zmq
         {
             zmq::pipe_t *pipe;
             bool active;
+			int fd;
         };
 
         //  We keep a set of pipes that have not been identified yet.
-        std::set <pipe_t*> anonymous_pipes;
+//        std::set <pipe_t*> anonymous_pipes;
+		typedef std::map<pipe_t *, outpipe_t> anonpipes_t;
+		anonpipes_t anonymous_pipes;
 
         //  Outbound pipes indexed by the peer IDs.
         typedef std::map <blob_t, outpipe_t> outpipes_t;
         outpipes_t outpipes;
+		
+		typedef std::unordered_map<int, blob_t> fdmap_t;
+		fdmap_t fdmap;
 
         //  The pipe we are currently writing to.
         zmq::pipe_t *current_out;

@@ -64,6 +64,7 @@ namespace zmq
         void process_command (zmq::command_t &cmd_);
         void send_inproc_connected (zmq::socket_base_t *socket_);
         void send_bind (zmq::own_t *destination_, zmq::pipe_t *pipe_, bool inc_seqnum_ = true);
+		void send_fd_assoc(zmq::own_t *destination_, zmq::pipe_t *pipe_, int fd_);
 
     protected:
 
@@ -117,6 +118,7 @@ namespace zmq
         virtual void process_own (zmq::own_t *object_);
         virtual void process_attach (zmq::i_engine *engine_);
         virtual void process_bind (zmq::pipe_t *pipe_);
+		virtual void process_fd_assoc(zmq::pipe_t *pipe_, int fd_);
         virtual void process_activate_read ();
         virtual void process_activate_write (uint64_t msgs_read_);
         virtual void process_hiccup (void *pipe_);

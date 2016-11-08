@@ -371,6 +371,12 @@ int zmq::socket_base_t::getsockopt (int option_, void *optval_,
         errno = ETERM;
         return -1;
     }
+	
+	//  First, check whether specific socket type overloads the option.
+    int ret = xgetsockopt (option_, optval_, optvallen_);
+    if (ret == 0 || errno != EINVAL) {
+        return ret;
+    }
 
     if (option_ == ZMQ_RCVMORE) {
         if (*optvallen_ < sizeof (int)) {
@@ -1430,6 +1436,12 @@ int zmq::socket_base_t::xsetsockopt (int, const void *, size_t)
     return -1;
 }
 
+int zmq::socket_base_t::xgetsockopt(int option_, void *optval_, size_t *optvallen_)
+{
+	errno = EINVAL;
+	return -1;
+}
+
 bool zmq::socket_base_t::xhas_out ()
 {
     return false;
@@ -1706,10 +1718,16 @@ void zmq::socket_base_t::monitor_event (int event_, intptr_t value_, const std::
         zmq_sendmsg (monitor_socket, &msg, ZMQ_SNDMORE);
 
         //  Send address in second frame
-        zmq_msg_init_size (&msg, addr_.size());
-        memcpy (zmq_msg_data (&msg), addr_.c_str (), addr_.size ());
+		std::string payload = xmonitor_event_payload(event_, value_, addr_);
+        zmq_msg_init_size (&msg, payload.size());
+        memcpy (zmq_msg_data (&msg), payload.c_str (), payload.size ());
         zmq_sendmsg (monitor_socket, &msg, 0);
-    }
+	}
+}
+
+std::string zmq::socket_base_t::xmonitor_event_payload(int event_, intptr_t value_, const std::string &addr_)
+{
+	return addr_;
 }
 
 void zmq::socket_base_t::stop_monitor (bool send_monitor_stopped_event_)

@@ -87,11 +87,11 @@ void zmq::router_t::xattach_pipe (pipe_t *pipe_, bool subscribe_to_all_)
         errno_assert (rc == 0);
     }
 
-    bool identity_ok = identify_peer (pipe_);
+    bool identity_ok = identify_peer (pipe_, -1);
     if (identity_ok)
         fq.attach (pipe_);
     else
-        anonymous_pipes.insert (pipe_);
+		anonymous_pipes[pipe_] = outpipe_t{pipe_, false, -1};
 }
 
 int zmq::router_t::xsetsockopt (int option_, const void *optval_,
@@ -151,26 +151,74 @@ int zmq::router_t::xsetsockopt (int option_, const void *optval_,
 
 void zmq::router_t::xpipe_terminated (pipe_t *pipe_)
 {
-    std::set <pipe_t*>::iterator it = anonymous_pipes.find (pipe_);
+    anonpipes_t::iterator it = anonymous_pipes.find (pipe_);
     if (it != anonymous_pipes.end ())
         anonymous_pipes.erase (it);
     else {
         outpipes_t::iterator iter = outpipes.find (pipe_->get_identity ());
         zmq_assert (iter != outpipes.end ());
+		fdmap_t::iterator fd = fdmap.find(iter->second.fd);
+		if (fd != fdmap.end()) {
+			fdmap.erase(fd);
+		}
+		
         outpipes.erase (iter);
         fq.pipe_terminated (pipe_);
         if (pipe_ == current_out)
             current_out = NULL;
-    }
+	}
+}
+
+void zmq::router_t::process_fd_assoc(zmq::pipe_t *pipe_, int fd_)
+{
+	anonpipes_t::iterator an = anonymous_pipes.find(pipe_);
+	if (an != anonymous_pipes.end()) {
+		an->second.fd = fd_;
+		return;
+	}
+	
+	outpipes_t::iterator i = outpipes.begin();
+	for (; i != outpipes.end(); ++i) {
+		if (i->second.pipe == pipe_) {
+			i->second.fd = fd_;
+			fdmap[fd_] = i->first;
+			break;
+		}
+	}
+}
+
+int zmq::router_t::xgetsockopt(int option_, void *optval_, size_t *optvallen_)
+{
+	if (option_ == ZMQ_IDENTITY_FD) {
+		if (!optval_ || !optvallen_ || *optvallen_ < 5) {
+			errno = EINVAL;
+			return -1;
+		}
+		
+		blob_t identity ((unsigned char*) optval_, *optvallen_);
+		outpipes_t::iterator it = outpipes.find (identity);
+		if (it == outpipes.end()) {
+			errno = EINVAL;
+			return -1;
+		}
+		
+		*((int *)optval_) = it->second.fd;
+		*optvallen_ = sizeof(int);
+		
+		return 0;
+	}
+	
+	errno = EINVAL;
+	return -1;
 }
 
 void zmq::router_t::xread_activated (pipe_t *pipe_)
 {
-    std::set <pipe_t*>::iterator it = anonymous_pipes.find (pipe_);
+    anonpipes_t::iterator it = anonymous_pipes.find (pipe_);
     if (it == anonymous_pipes.end ())
         fq.activated (pipe_);
     else {
-        bool identity_ok = identify_peer (pipe_);
+        bool identity_ok = identify_peer (pipe_, it->second.fd);
         if (identity_ok) {
             anonymous_pipes.erase (it);
             fq.attach (pipe_);
@@ -419,10 +467,21 @@ bool zmq::router_t::xhas_out ()
 
 zmq::blob_t zmq::router_t::get_credential () const
 {
-    return fq.get_credential ();
+	return fq.get_credential ();
 }
 
-bool zmq::router_t::identify_peer (pipe_t *pipe_)
+std::string zmq::router_t::xmonitor_event_payload(int event_, intptr_t value_, const std::string &addr_)
+{
+	std::string payload;
+	
+	fdmap_t::iterator i = fdmap.find(value_);
+	if (i != fdmap.end())
+		payload = std::string((char *)i->second.data(), i->second.size());
+	
+	return payload;
+}
+
+bool zmq::router_t::identify_peer (pipe_t *pipe_, int fd_)
 {
     msg_t msg;
     blob_t identity;
@@ -479,11 +538,12 @@ bool zmq::router_t::identify_peer (pipe_t *pipe_)
 
                     it->second.pipe->set_identity (new_identity);
                     outpipe_t existing_outpipe =
-                        {it->second.pipe, it->second.active};
+                        {it->second.pipe, it->second.active, it->second.fd};
 
                     ok = outpipes.insert (outpipes_t::value_type (
                         new_identity, existing_outpipe)).second;
                     zmq_assert (ok);
+					fdmap[existing_outpipe.fd] = new_identity;
 
                     //  Remove the existing identity entry to allow the new
                     //  connection to take the identity.
@@ -500,8 +560,9 @@ bool zmq::router_t::identify_peer (pipe_t *pipe_)
 
     pipe_->set_identity (identity);
     //  Add the record into output pipes lookup table
-    outpipe_t outpipe = {pipe_, true};
+    outpipe_t outpipe = {pipe_, true, fd_};
     ok = outpipes.insert (outpipes_t::value_type (identity, outpipe)).second;
+	fdmap[fd_] = identity;
     zmq_assert (ok);
 
     return true;

@@ -149,6 +149,8 @@ namespace zmq
         //  method.
         virtual int xsetsockopt (int option_, const void *optval_,
             size_t optvallen_);
+        virtual int xgetsockopt (int option_, void *optval_,
+			size_t *optvallen_);
 
         //  The default implementation assumes that send is not supported.
         virtual bool xhas_out ();
@@ -186,6 +188,7 @@ namespace zmq
 
         // Socket event data dispatch
         void monitor_event (int event_, intptr_t value_, const std::string& addr_);
+		virtual std::string xmonitor_event_payload(int event_, intptr_t value_, const std::string &addr_);
 
         // Monitor socket cleanup
         void stop_monitor (bool send_monitor_stopped_event_ = true);
